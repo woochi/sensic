@@ -1,0 +1,18 @@
+.character {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 160px;
+  height: 160px;
+  background: white;
+  border: 2px solid #bbb;
+  text-align: center;
+  border-radius: 50%;
+}
+
+.name {
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 12px;
+}

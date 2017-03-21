@@ -1,0 +1,36 @@
+html, body {
+  padding: 0;
+  margin: 0;
+  font: normal 14px/20px sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app {
+  height: 100vh;
+  display: flex;
+}
+
+.sidebar {
+  flex: 0 0 200px;
+  height: 100vh;
+  background: #eee;
+}
+
+.content {
+  display: flex;
+  flex: 1 1 auto;
+}
+
+.canvas {
+  flex: 1 1 auto;
+  overflow: hidden
+}
+
+.console {
+  height: 100vh;
+  overflow: auto;
+  border-left: 2px solid #eee;
+}

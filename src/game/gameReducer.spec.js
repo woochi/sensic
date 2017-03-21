@@ -122,6 +122,12 @@ describe('gameReducer', function() {
       before(function() {
         this.state = gameReducer(this.state, addLocation(20));
       });
+
+      it.only('reports error for the invalid location', function() {
+        expect(this.state.errors).to.eql([
+          {location: 20, message: 'Invalid location 20 on board'}
+        ]);
+      });
     });
   });
 });

@@ -48,7 +48,7 @@ const gameBoardReducer = handleActions({
 
 
 function validateBoardState(boardState, story, currentStep) {
-  if (!boardState || !story || !currentStep) {
+  if (!boardState || !story) {
     return [];
   }
 
