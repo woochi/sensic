@@ -7,8 +7,8 @@
     "start": "webpack-dev-server --progress --profile --colors",
     "lint": "eslint --ext js --ext jsx src || exit 0",
     "dev": " webpack-dashboard -- webpack-dev-server --progress --profile --colors",
-    "test": "karma start --single-run",
-    "test:watch": "karma start"
+    "test": "mocha --opts mocha.opts",
+    "test:watch": "mocha -w --opts mocha.opts"
   },
   "repository": {
     "type": "git",
@@ -19,14 +19,15 @@
   "homepage": "https://github.com/woochi/sensic",
   "dependencies": {
     "babel-plugin-transform-object-rest-spread": "^6.23.0",
+    "babel-polyfill": "^6.23.0",
     "babel-preset-env": "^1.2.2",
-    "jasmine-core": "^2.5.2",
-    "karma": "^1.5.0",
-    "karma-phantomjs-launcher": "^1.0.4",
-    "karma-webpack": "^2.0.3",
+    "babel-register": "^6.24.0",
+    "chai": "^3.5.0",
+    "mocha": "^3.2.0",
     "node-sass": "^4.3.0",
     "react": "15.4.2",
     "react-dom": "15.4.2",
+    "redux-actions": "^2.0.1",
     "sass-loader": "^6.0.2"
   },
   "devDependencies": {
@@ -42,7 +43,6 @@
     "extract-text-webpack-plugin": "^v2.0.0-rc.1",
     "file-loader": "^0.10.0",
     "html-webpack-plugin": "^2.26.0",
-    "karma-jasmine": "^1.1.0",
     "postcss-loader": "^1.2.2",
     "react-hot-loader": "^3.0.0-beta.6",
     "style-loader": "0.13.1",

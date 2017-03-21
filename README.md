@@ -22,7 +22,7 @@ Note that you can naturally also develop the game logic separately from the brow
 
 ## Testing
 
-The project uses [Karma](https://karma-runner.github.io/) test runner for running tests written with the [Jasmine](https://jasmine.github.io/) test framework. The test runner automatically watches test files with the naming format `*.spec.js`. To continuously run tests on file changes, use:
+The project uses [Mocha](https://github.com/mochajs/mocha) test runner for running tests and additionally the [Chai](http://chaijs.com/) expectation library for writing expectations. The test runner automatically watches test files with the naming format `*.spec.js`. To continuously run tests on file changes, use:
 
 ```
 yarn test:watch

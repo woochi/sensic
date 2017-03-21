@@ -1,0 +1,4 @@
+test/index.js
+src/**/*.spec.js
+--recursive
+
