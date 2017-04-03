@@ -1,5 +1,6 @@
 require('babel-register')({
   plugins: [
-    'babel-polyfill'
+    'babel-polyfill',
+    'babel-plugin-rewire'
   ]
 });
