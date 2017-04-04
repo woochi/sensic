@@ -17,14 +17,26 @@ const initialState = {
 
 const gameBoardReducer = handleActions({
   [addLocation]: (state, action) => {
+    const {payload: location} = action;
+
+    if (state[location]) {
+      return state;
+    }
+
     return {
       ...state,
-      [action.payload]: []
+      [location]: []
     };
   },
 
   [removeLocation]: (state, action) => {
-    return omit(state, action.payload);
+    const {payload: location} = action;
+
+    if (!state[location]) {
+      return state;
+    }
+
+    return omit(state, location);
   },
 
   [addCharacter]: (state, action) => {
@@ -66,9 +78,15 @@ function validateBoardState(boardState, story, currentStep) {
       gameBoardReducer(currentState, action)
     , {});
 
-  const invalidLocationErrors = difference(Object.keys(boardState), Object.keys(expectedBoardState)).map(location => ({
+  const expectedLocations = Object.keys(expectedBoardState);
+  const currentLocations = Object.keys(boardState);
+  const invalidLocationErrors = difference(currentLocations, expectedLocations).map(location => ({
     location: parseInt(location),
     message: `Invalid location ${location} on board`
+  }));
+  const missingLocationErrors = difference(expectedLocations, currentLocations).map(location => ({
+    location: parseInt(location),
+    message: `Missing location ${location} from board`
   }));
 
   const invalidCharacterErrors = Object.keys(boardState).reduce((errors, location) => {
@@ -82,7 +100,9 @@ function validateBoardState(boardState, story, currentStep) {
     })));
   }, []);
 
-  return invalidLocationErrors.concat(invalidCharacterErrors);
+  return invalidLocationErrors
+    .concat(missingLocationErrors)
+    .concat(invalidCharacterErrors);
 }
 
 function gameReducer(state = initialState, action) {

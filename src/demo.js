@@ -42,7 +42,10 @@ process.on('exit', exitHandler);
 process.on('SIGINT', exitHandler);
 
 //catches uncaught exceptions
-process.on('uncaughtException', exitHandler);
+process.on('uncaughtException', (error) => {
+  console.log(error);
+  exitHandler();
+});
 
 
 // Initialize

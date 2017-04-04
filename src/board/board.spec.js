@@ -26,7 +26,7 @@ class MockMagnetometer {
   passData(callback) {
     const data = isActive ? activeData : inactiveData;
 
-    callback(data);
+    callback({heading: data});
     setTimeout(() => {
       this.passData(callback);
     }, 1000/this.opts.frequency);

@@ -30,7 +30,7 @@ class Board {
     });
   }
 
-  stop() {
+  stop = () => {
     clearInterval(this.updateLoop);
     clearTimeout(this.deferredEndUpdate);
     this.power.low();
