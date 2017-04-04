@@ -87,6 +87,21 @@ describe('gameReducer', function() {
               expect(this.state.currentStep).to.eql(4);
             });
 
+            describe('removing character from location A again', function() {
+              before(function() {
+                this.previousState = this.state;
+                this.state = gameReducer(this.state, removeCharacter(1, 10));
+              });
+
+              it('does not increment the current step again', function() {
+                expect(this.state.currentStep).to.eql(4);
+              });
+
+              it('retains the previous state', function() {
+                expect(this.state).to.eql(this.previousState);
+              });
+            });
+
             describe('adding the character to location B', function() {
               before(function() {
                 this.state = gameReducer(this.state, addCharacter(1, 20));
@@ -123,7 +138,7 @@ describe('gameReducer', function() {
         this.state = gameReducer(this.state, addLocation(20));
       });
 
-      it.only('reports error for the invalid location', function() {
+      it('reports error for the invalid location', function() {
         expect(this.state.errors).to.eql([
           {location: 20, message: 'Invalid location 20 on board'}
         ]);

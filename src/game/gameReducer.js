@@ -31,6 +31,10 @@ const gameBoardReducer = handleActions({
     const {character, location} = action.payload;
     const existingCharacters = state[location] || [];
 
+    if (!state[location] || existingCharacters.includes(character)) {
+      return state;
+    }
+
     return {
       ...state,
       [location]: union(state[location], [character])
@@ -39,6 +43,11 @@ const gameBoardReducer = handleActions({
 
   [removeCharacter]: (state, action) => {
     const {character, location} = action.payload;
+
+    if (!state[location] || !state[location].includes(character)) {
+      return state;
+    }
+
     return {
       ...state,
       [location]: without(state[location], character)
@@ -85,12 +94,17 @@ function gameReducer(state = initialState, action) {
   }
 
   const newBoardState = gameBoardReducer(state.board, action);
+
+  if (newBoardState === state.board) {
+    return state;
+  }
+
   const errors = validateBoardState(newBoardState, state.story, state.currentStep);
   const completed = !!state.story && !errors.length && state.currentStep === state.story.solution.length - 1;
 
   return {
     ...state,
-    currentStep: errors.length ? state.currentStep : state.currentStep + 1,
+    currentStep: (errors.length || state.board === newBoardState) ? state.currentStep : state.currentStep + 1,
     completed,
     errors,
     board: newBoardState

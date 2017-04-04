@@ -1,7 +1,7 @@
 import {expect} from 'chai';
 import {threePointSecondDerivative} from './differential';
 
-describe.only('threePointSecondDerivative', function() {
+describe('threePointSecondDerivative', function() {
   it('calculates the second derivative for y=x^2', function() {
     expect(threePointSecondDerivative(4, 9, 16, 1)).to.eql(2);
   });

@@ -1,3 +1,5 @@
+import {int16} from 'johnny-five/lib/fn';
+
 export default {
   REGISTER: {
     value: {

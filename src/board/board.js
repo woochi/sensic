@@ -5,77 +5,75 @@ import {threePointSecondDerivative} from './differential';
 class Board {
   constructor(opts) {
     this.opts = {
-      threshold: 40,
-      frequency: 100,
+      threshold: 1,
+      frequency: 50,
       ...opts
     };
 
     this.board = new ArduinoBoard();
-    this.power = new Pin(2);
     this.magnetometerValues = [0, 0, 0];
+  }
 
+  start() {
+    // Start listening to magnetometer
     this.board.on('ready', () => {
+      this.power = new Pin(2);
+
       // Set up magnetometer connection
       this.magnetometer = new Magnetometer({
         controller: LSM303DLH,
         frequency: this.opts.frequency
       });
+
+      this.magnetometer.on('data', this.onMagnetometerUpdate);
+      this.updateLoop = setInterval(this.updateState, 500);
     });
   }
 
-  start() {
-    // Start listening to magnetometer
-    this.magnetometer.on('data', this.onMagnetometerUpdate);
-  }
-
   stop() {
+    clearInterval(this.updateLoop);
+    clearTimeout(this.deferredEndUpdate);
     this.power.low();
   }
 
-  onMagnetometerUpdate = ({x, y, z}) => {
-    // TODO: check x value
-    const {threshold} = this.opts;
-
-    this.magnetometerValues.shift();
-    this.magnetometerValues.push(x);
-
+  onMagnetometerUpdate = ({heading: {x}}) => {
     if (this.updating) {
-      const timeDifference = 1000/this.opts.frequency;
+      this.magnetometerValues.shift();
+      this.magnetometerValues.push(x);
+
+      const {threshold, frequency} = this.opts;
+      const timeDifference = 1000/frequency;
       const acceleration = threePointSecondDerivative(...this.magnetometerValues, timeDifference);
+
+      //console.log(this.magnetometerValues, acceleration);
 
       if (acceleration < -threshold) {
         this.characterWasActiveDuringUpdate = true;
+        this.endUpdate();
       }
     }
   }
 
   getState() {
-    return {};
+    return this.characterWasActiveDuringUpdate || false;
   }
 
-  updateState() {
+  updateState = () => {
     this.startUpdate();
-    setTimeout(this.endUpdate, 100);
+    this.deferredEndUpdate = setTimeout(this.endUpdate, 100);
   }
 
   startUpdate = () => {
-    console.log('START UPDATE');
     this.characterWasActiveDuringUpdate = false;
     this.updating = true;
     this.power.high();
   }
 
   endUpdate = () => {
-    console.log('END UPDATE');
-    clearTimeout(this.endUpdateTimeout);
-    this.updating = false;
+    clearTimeout(this.deferredEndUpdate);
     this.power.low();
-
-    if (this.characterWasActiveDuringUpdate) {
-      console.log('CHARACTER WAS ACTIVE');
-    } else {
-      console.log('CHARACTER WAS INACTIVE');
-    }
+    this.updating = false;
+    this.magnetometerValues = [0, 0, 0];
   }
 }
 

@@ -47,7 +47,7 @@ class MockPin {
   }
 }
 
-describe.only('Board', function() {
+describe('Board', function() {
 
   beforeEach(function() {
     this.clock = sinon.useFakeTimers();
@@ -64,29 +64,51 @@ describe.only('Board', function() {
     Board.__ResetDependency__('Pin');
   });
 
-  it('works', function() {
-    const board = new Board();
+  describe('starting the board', function() {
+    beforeEach(function() {
+      this.board = new Board();
 
-    board.start();
+      this.board.start();
+    });
 
-    this.clock.tick(100);
-    board.updateState();
-    this.clock.tick(100);
+    afterEach(function() {
+      this.board.stop();
+    });
 
-    // Add character
-    console.log('ADD CHARACTER');
-    isActive = true;
-    board.updateState();
-    this.clock.tick(140);
+    it('initially has no active characters', function() {
+      expect(this.board.getState()).to.eql(false);
+    });
 
-    // Remove character
-    console.log('REMOVE CHARACTER')
-    isActive = false;
-    this.clock.tick(100);
+    describe('waiting for the update interval (500ms)', function() {
+      beforeEach(function() {
+        this.clock.tick(600);
+      });
 
-    board.updateState();
-    this.clock.tick(100);
+      it('still has no active characters', function() {
+        expect(this.board.getState()).to.eql(false);
+      });
+    });
 
-    board.stop();
+    describe('bringing the character to the location and waiting for the update interval', function() {
+      beforeEach(function() {
+        isActive = true;
+        this.clock.tick(600);
+      });
+
+      it('reports the character as active', function() {
+        expect(this.board.getState()).to.eql(true);
+      });
+
+      describe('removing the character from the location and waiting for the update interval', function() {
+        beforeEach(function() {
+          isActive = false;
+          this.clock.tick(600);
+        });
+
+        it('reports the character as inactive', function() {
+          expect(this.board.getState()).to.eql(false);
+        });
+      });
+    });
   });
 });
