@@ -106,6 +106,10 @@ function validateBoardState(boardState, story, currentStep) {
 }
 
 function gameReducer(state = initialState, action) {
+  if (state.completed) {
+    return state;
+  }
+
   if (action.type === loadStory.toString()) {
     return {
       ...initialState,

@@ -1,6 +1,7 @@
 import Board from './board';
 import gameReducer from './game/gameReducer';
 import {loadStory, addLocation, addCharacter, removeCharacter} from './game/gameActions';
+import colors from 'colors';
 
 const story = {
   name: 'Demo story',
@@ -19,16 +20,29 @@ gameState = gameReducer(gameState, addLocation(10));
 
 function updateGameState() {
   const isCharacterActive = board.getState();
+  const previousGameState = gameState;
 
   if (isCharacterActive) {
     //console.log('CHARACTER IS ACTIVE');
     gameState = gameReducer(gameState, addCharacter(1, 10));
+
+    if (gameState !== previousGameState) {
+      console.log(colors.cyan('ADDED CHARACTER'));
+    }
   } else {
     //console.log('CHARACTER IS INACTIVE');
     gameState = gameReducer(gameState, removeCharacter(1, 10));
+
+    if (gameState !== previousGameState) {
+      console.log(colors.cyan('REMOVED CHARACTER'));
+    }
   }
 
-  console.log(gameState);
+  //console.log(gameState);
+
+  if (gameState !== previousGameState && gameState.completed) {
+    console.log(colors.green('YAY, STORY COMPLETE!'));
+  }
 }
 
 function exitHandler() {
@@ -46,7 +60,6 @@ process.on('uncaughtException', (error) => {
   console.log(error);
   exitHandler();
 });
-
 
 // Initialize
 board.start();
