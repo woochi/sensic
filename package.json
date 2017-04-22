@@ -8,7 +8,8 @@
     "dev": " webpack-dashboard -- webpack-dev-server --progress --profile --colors",
     "test": "mocha --opts mocha.opts",
     "test:watch": "mocha -w --opts mocha.opts",
-    "demo": "babel-node src/demo.js"
+    "demo": "babel-node src/demo.js",
+    "debug": "babel-node src/debug.js"
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,7 @@
     "chai": "^3.5.0",
     "child_process": "^1.0.2",
     "colors": "^1.1.2",
+    "invariant": "^2.2.2",
     "johnny-five": "^0.10.6",
     "lodash": "^4.17.4",
     "mocha": "^3.2.0",
