@@ -1,3 +1,5 @@
+// First mid-term demo story script
+
 import Board from './board';
 import gameReducer from './game/gameReducer';
 import {loadStory, addLocation, addCharacter, removeCharacter} from './game/gameActions';
