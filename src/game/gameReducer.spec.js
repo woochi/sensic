@@ -35,6 +35,17 @@ describe('gameReducer', function() {
       });
     });
 
+    describe('removing a non-existent location', function() {
+      beforeEach(function() {
+        this.previousState = this.state;
+        this.state = gameReducer(this.state, removeLocation(30));
+      });
+
+      it('retains the previous state', function() {
+        expect(this.state).to.eql(this.previousState);
+      });
+    });
+
     describe('adding location A', function() {
       before(function() {
         this.state = gameReducer(this.state, addLocation(10));
@@ -42,6 +53,21 @@ describe('gameReducer', function() {
 
       it('increments current step', function() {
         expect(this.state.currentStep).to.eql(1);
+      });
+
+      it('adds the location to the board state with empty character list', function() {
+        expect(this.state.board[10]).to.eql([]);
+      });
+
+      describe('adding the same location twice', function() {
+        before(function() {
+          this.previousState = this.state;
+          this.state = gameReducer(this.state, addLocation(10));
+        });
+
+        it('retains the previous state', function() {
+          expect(this.state).to.eql(this.previousState);
+        });
       });
 
       describe('adding incorrect location', function() {
@@ -53,10 +79,25 @@ describe('gameReducer', function() {
           expect(this.state.currentStep).to.equal(1);
         });
 
-        it('reports error for the invalid location', function() {
+        it('reports error for the invalid and missing locations', function() {
           expect(this.state.errors).to.eql([
-            {location: 30, message: 'Invalid location 30 on board'}
+            {location: 30, message: 'Invalid location 30 on board'},
+            {location: 20, message: 'Missing location 20 from board'}
           ]);
+        });
+      });
+
+      describe('removing location A', function() {
+        beforeEach(function() {
+          this.state = gameReducer(this.state, removeLocation(10));
+        });
+
+        it('removes the location from board', function() {
+          expect(this.state.board[10]).to.eql(undefined);
+        });
+
+        it('does not increment current step', function() {
+          expect(this.state.currentStep).to.eql(1);
         });
       });
 
@@ -78,6 +119,17 @@ describe('gameReducer', function() {
             expect(this.state.currentStep).to.eql(3);
           });
 
+          describe('adding the same character to the same location twice', function() {
+            before(function() {
+              this.previousState = this.state;
+              this.state = gameReducer(this.state, addCharacter(1, 10));
+            });
+
+            it('retains the previous state', function() {
+              expect(this.state).to.eql(this.previousState);
+            });
+          });
+
           describe('removing the character from location A', function() {
             before(function() {
               this.state = gameReducer(this.state, removeCharacter(1, 10));
@@ -85,6 +137,21 @@ describe('gameReducer', function() {
 
             it('increments current step', function() {
               expect(this.state.currentStep).to.eql(4);
+            });
+
+            describe('removing character from location A again', function() {
+              before(function() {
+                this.previousState = this.state;
+                this.state = gameReducer(this.state, removeCharacter(1, 10));
+              });
+
+              it('does not increment the current step again', function() {
+                expect(this.state.currentStep).to.eql(4);
+              });
+
+              it('retains the previous state', function() {
+                expect(this.state).to.eql(this.previousState);
+              });
             });
 
             describe('adding the character to location B', function() {
@@ -123,9 +190,10 @@ describe('gameReducer', function() {
         this.state = gameReducer(this.state, addLocation(20));
       });
 
-      it.only('reports error for the invalid location', function() {
+      it('reports error for the invalid and missing locations', function() {
         expect(this.state.errors).to.eql([
-          {location: 20, message: 'Invalid location 20 on board'}
+          {location: 20, message: 'Invalid location 20 on board'},
+          {location: 10, message: 'Missing location 10 from board'}
         ]);
       });
     });

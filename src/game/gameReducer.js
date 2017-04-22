@@ -17,19 +17,35 @@ const initialState = {
 
 const gameBoardReducer = handleActions({
   [addLocation]: (state, action) => {
+    const {payload: location} = action;
+
+    if (state[location]) {
+      return state;
+    }
+
     return {
       ...state,
-      [action.payload]: []
+      [location]: []
     };
   },
 
   [removeLocation]: (state, action) => {
-    return omit(state, action.payload);
+    const {payload: location} = action;
+
+    if (!state[location]) {
+      return state;
+    }
+
+    return omit(state, location);
   },
 
   [addCharacter]: (state, action) => {
     const {character, location} = action.payload;
     const existingCharacters = state[location] || [];
+
+    if (!state[location] || existingCharacters.includes(character)) {
+      return state;
+    }
 
     return {
       ...state,
@@ -39,6 +55,11 @@ const gameBoardReducer = handleActions({
 
   [removeCharacter]: (state, action) => {
     const {character, location} = action.payload;
+
+    if (!state[location] || !state[location].includes(character)) {
+      return state;
+    }
+
     return {
       ...state,
       [location]: without(state[location], character)
@@ -57,9 +78,15 @@ function validateBoardState(boardState, story, currentStep) {
       gameBoardReducer(currentState, action)
     , {});
 
-  const invalidLocationErrors = difference(Object.keys(boardState), Object.keys(expectedBoardState)).map(location => ({
+  const expectedLocations = Object.keys(expectedBoardState);
+  const currentLocations = Object.keys(boardState);
+  const invalidLocationErrors = difference(currentLocations, expectedLocations).map(location => ({
     location: parseInt(location),
     message: `Invalid location ${location} on board`
+  }));
+  const missingLocationErrors = difference(expectedLocations, currentLocations).map(location => ({
+    location: parseInt(location),
+    message: `Missing location ${location} from board`
   }));
 
   const invalidCharacterErrors = Object.keys(boardState).reduce((errors, location) => {
@@ -73,10 +100,16 @@ function validateBoardState(boardState, story, currentStep) {
     })));
   }, []);
 
-  return invalidLocationErrors.concat(invalidCharacterErrors);
+  return invalidLocationErrors
+    .concat(missingLocationErrors)
+    .concat(invalidCharacterErrors);
 }
 
 function gameReducer(state = initialState, action) {
+  if (state.completed) {
+    return state;
+  }
+
   if (action.type === loadStory.toString()) {
     return {
       ...initialState,
@@ -85,12 +118,17 @@ function gameReducer(state = initialState, action) {
   }
 
   const newBoardState = gameBoardReducer(state.board, action);
+
+  if (newBoardState === state.board) {
+    return state;
+  }
+
   const errors = validateBoardState(newBoardState, state.story, state.currentStep);
   const completed = !!state.story && !errors.length && state.currentStep === state.story.solution.length - 1;
 
   return {
     ...state,
-    currentStep: errors.length ? state.currentStep : state.currentStep + 1,
+    currentStep: (errors.length || state.board === newBoardState) ? state.currentStep : state.currentStep + 1,
     completed,
     errors,
     board: newBoardState
