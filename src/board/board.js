@@ -6,13 +6,11 @@ import invariant from 'invariant';
 class Board {
   constructor(options) {
     this.options = {
-      threshold: 1,
+      threshold: 8,
       frequency: 50,
       characterPins: [],
       ...options
     };
-
-    console.log(this.options.characterPins.length);
 
     invariant(
       this.options.characterPins.length > 0,
@@ -29,6 +27,7 @@ class Board {
       this.characterPins = this.options.characterPins.map(pinNumber => {
         return new Pin(pinNumber);
       });
+      this.depowerCharacterPins();
 
       // Set up magnetometer connection
       this.magnetometer = new Magnetometer({
@@ -41,6 +40,13 @@ class Board {
     });
   }
 
+  depowerCharacterPins = () => {
+    if (this.characterPins) {
+      console.log('DEPOWER PINS');
+      this.characterPins.forEach(pin => pin.low());
+    }
+  }
+
   stop = () => {
     console.log('Stopping board');
 
@@ -49,9 +55,7 @@ class Board {
     clearTimeout(this.deferredEndUpdate);
 
     console.log('Turning character pin powers low');
-    if (this.characterPins) {
-      this.characterPins.forEach(pin => pin.low());
-    }
+    this.depowerCharacterPins();
   }
 
   resetMagnetometerValues = () => {
@@ -75,6 +79,8 @@ class Board {
     const {frequency} = this.options;
     const timeDifference = 1000/frequency;
 
+    console.log(x);
+
     return {
       x: threePointSecondDerivative(...x, timeDifference),
       y: threePointSecondDerivative(...y, timeDifference),
@@ -85,16 +91,24 @@ class Board {
   onMagnetometerUpdate = ({heading}) => {
     // const {x, y, z} = heading;
     if (this.updating) {
-      console.log('HEAD', heading);
       const {threshold} = this.options;
       this.updateMagnetometerValues(heading);
       const acceleration = this.getMagnetometerAcceleration();
 
-      console.log(acceleration);
-
-      if (acceleration.x < -threshold) {
+      if (!this.endingCurrentCharacterUpdate && Math.abs(acceleration.x) > threshold) {
         // If we detect acceleration when the character power was turned on, add character as active
-        this.activeCharacters.push(this.currentCharacter);
+        this.activeCharacters.push(this.currentCharacterIndex);
+
+        // Start pulse end
+        this.endingCurrentCharacterUpdate = true;
+
+        // Stop power for current character
+        this.currentCharacterPin.low();
+      }
+
+      // Wait for the magnet pulse to properly end before pulsing the next character.
+      // This avoids the magnetometer to be triggered by the residue from the previous pulse.
+      if (this.endingCurrentCharacterUpdate && Math.abs(acceleration.x) < threshold - 1) {
         this.endCurrentCharacterUpdate();
       }
     }
@@ -110,12 +124,13 @@ class Board {
   }
 
   startUpdate = () => {
-    // Pule through character pins and update state, starting from the first pin
+    // Pulse through character pins and update state, starting from the first pin
     this.currentCharacterIndex = 0;
     this.updateCurrentCharacter();
   }
 
   updateCurrentCharacter = () => {
+    this.endingCurrentCharacterUpdate = false;
     this.updating = true;
 
     // Start power for current character
@@ -133,9 +148,6 @@ class Board {
     // Reset magnetometer state
     this.updating = false;
     this.resetMagnetometerValues();
-
-    // Stop power for current character
-    this.currentCharacterPin.low();
 
     if (this.currentCharacterIndex < this.characterPins.length - 1) {
       // If this was not the last character, start pulsing the next one
