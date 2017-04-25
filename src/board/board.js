@@ -12,13 +12,15 @@ class Board {
       ...options
     };
 
+    console.log(this.options.characterPins.length);
+
     invariant(
-      this.options.characterPins.length === 0,
+      this.options.characterPins.length > 0,
       'You must define the character power pin numbers in options.'
     );
 
     this.board = new ArduinoBoard();
-    this.magnetometerValues = [0, 0, 0];
+    this.resetMagnetometerValues();
   }
 
   start() {
@@ -40,23 +42,57 @@ class Board {
   }
 
   stop = () => {
+    console.log('Stopping board');
+
+    console.log('Clearing update intervals and timeouts');
     clearInterval(this.updateLoop);
     clearTimeout(this.deferredEndUpdate);
-    this.characterPins.forEach(pin => pin.low());
+
+    console.log('Turning character pin powers low');
+    if (this.characterPins) {
+      this.characterPins.forEach(pin => pin.low());
+    }
   }
 
-  onMagnetometerUpdate = ({heading: {x}}) => {
+  resetMagnetometerValues = () => {
+    this.magnetometerValues = {
+      x: [0, 0, 0],
+      y: [0, 0, 0],
+      z: [0, 0, 0]
+    };
+  }
+
+  updateMagnetometerValues = (heading) => {
+    ['x', 'y', 'z'].forEach(dimension => {
+      const dimensionValues = this.magnetometerValues[dimension];
+      dimensionValues.shift();
+      dimensionValues.push(heading[dimension]);
+    });
+  }
+
+  getMagnetometerAcceleration = () => {
+    const {x, y, z} = this.magnetometerValues;
+    const {frequency} = this.options;
+    const timeDifference = 1000/frequency;
+
+    return {
+      x: threePointSecondDerivative(...x, timeDifference),
+      y: threePointSecondDerivative(...y, timeDifference),
+      z: threePointSecondDerivative(...z, timeDifference)
+    };
+  };
+
+  onMagnetometerUpdate = ({heading}) => {
+    // const {x, y, z} = heading;
     if (this.updating) {
-      this.magnetometerValues.shift();
-      this.magnetometerValues.push(x);
+      console.log('HEAD', heading);
+      const {threshold} = this.options;
+      this.updateMagnetometerValues(heading);
+      const acceleration = this.getMagnetometerAcceleration();
 
-      const {threshold, frequency} = this.options;
-      const timeDifference = 1000/frequency;
-      const acceleration = threePointSecondDerivative(...this.magnetometerValues, timeDifference);
+      console.log(acceleration);
 
-      //console.log(this.magnetometerValues, acceleration);
-
-      if (acceleration < -threshold) {
+      if (acceleration.x < -threshold) {
         // If we detect acceleration when the character power was turned on, add character as active
         this.activeCharacters.push(this.currentCharacter);
         this.endCurrentCharacterUpdate();
@@ -76,14 +112,14 @@ class Board {
   startUpdate = () => {
     // Pule through character pins and update state, starting from the first pin
     this.currentCharacterIndex = 0;
-    this.updateCurrentCharacterState();
+    this.updateCurrentCharacter();
   }
 
   updateCurrentCharacter = () => {
     this.updating = true;
 
     // Start power for current character
-    this.currentCharacterPin = this.characterPins[currentCharacterIndex];
+    this.currentCharacterPin = this.characterPins[this.currentCharacterIndex];
     this.currentCharacterPin.high();
 
     // Schedule pulse to end after 100ms
@@ -96,7 +132,7 @@ class Board {
 
     // Reset magnetometer state
     this.updating = false;
-    this.magnetometerValues = [0, 0, 0];
+    this.resetMagnetometerValues();
 
     // Stop power for current character
     this.currentCharacterPin.low();
@@ -112,7 +148,7 @@ class Board {
 
   endUpdate = () => {
     this.updating = false;
-    this.magnetometerValues = [0, 0, 0];
+    this.resetMagnetometerValues();
   }
 }
 

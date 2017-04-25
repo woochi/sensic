@@ -13,7 +13,9 @@ const story = {
     removeCharacter(1, 10)
   ]
 };
-const board = new Board();
+const board = new Board({
+  characterPins: [2]
+});
 let gameState = gameReducer(undefined, loadStory(story));
 
 // Build initial game board state;
