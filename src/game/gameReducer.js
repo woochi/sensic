@@ -4,7 +4,10 @@ import {
   addLocation,
   removeLocation,
   addCharacter,
-  removeCharacter
+  removeCharacter,
+  speak,
+  indicateLocation,
+  indicateSuccess
 } from './gameActions';
 import {difference, omit, union, without} from 'lodash';
 
@@ -64,6 +67,18 @@ const gameBoardReducer = handleActions({
       ...state,
       [location]: without(state[location], character)
     };
+  },
+
+  [speak]: (state, action) => {
+    return {...state};
+  },
+
+  [indicateLocation]: (state, action) => {
+    return {...state};
+  },
+
+  [indicateSuccess]: (state, action) => {
+    return {...state};
   }
 }, {});
 
@@ -125,10 +140,11 @@ function gameReducer(state = initialState, action) {
 
   const errors = validateBoardState(newBoardState, state.story, state.currentStep);
   const completed = !!state.story && !errors.length && state.currentStep === state.story.solution.length - 1;
+  const currentStep = (errors.length || state.board === newBoardState) ? state.currentStep : state.currentStep + 1;
 
   return {
     ...state,
-    currentStep: (errors.length || state.board === newBoardState) ? state.currentStep : state.currentStep + 1,
+    currentStep,
     completed,
     errors,
     board: newBoardState
