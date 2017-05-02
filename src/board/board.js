@@ -1,14 +1,49 @@
-import {Board as ArduinoBoard, Magnetometer, Pin} from 'johnny-five';
-import LSM303DLH from './lsm303dlh';
+import {Board as ArduinoBoard, Magnetometer, Pin, Expander} from 'johnny-five';
 import {threePointSecondDerivative} from './differential';
 import invariant from 'invariant';
+import Multiplexer from './multiplexer';
+import series from 'async/series';
+
+function createMagnetometerValues() {
+  return {
+    x: [0, 0, 0],
+    y: [0, 0, 0],
+    z: [0, 0, 0]
+  };
+}
+
+function updateMagnetometerValues(magnetometerValues, heading) {
+  return ['x', 'y', 'z'].reduce((values, dimension) => {
+    const dimensionValues = values[dimension].slice(1);
+    dimensionValues.push(heading[dimension]);
+
+    return {...values, [dimension]: dimensionValues};
+  }, magnetometerValues);
+}
+
+function acceleration(magnetometerValues, frequency) {
+  const {x, y, z} = magnetometerValues;
+  const timeDifference = 1000/frequency;
+
+  // TODO: return null for axis if values have not been populated
+  return {
+    x: threePointSecondDerivative(...x, timeDifference),
+    y: threePointSecondDerivative(...y, timeDifference),
+    z: threePointSecondDerivative(...z, timeDifference)
+  };
+}
+
+function totalAcceleration({x, y, z}) {
+  return (Math.abs(x) + Math.abs(y) + Math.abs(z)) * 0.33;
+}
 
 class Board {
   constructor(options) {
     this.options = {
-      threshold: 8,
+      threshold: 4,
       frequency: 50,
       characterPins: [],
+      locationIds: [],
       ...options
     };
 
@@ -17,6 +52,7 @@ class Board {
       'You must define the character power pin numbers in options.'
     );
 
+    this.state = {};
     this.board = new ArduinoBoard();
     this.resetMagnetometerValues();
   }
@@ -24,27 +60,32 @@ class Board {
   start() {
     // On board ready
     this.board.on('ready', () => {
+      // Set up components
+      this.multiplexer = new Multiplexer();
+      this.expander = new Expander('PCA9685');
       this.characterPins = this.options.characterPins.map(pinNumber => {
         return new Pin(pinNumber);
       });
-      this.depowerCharacterPins();
-
-      // Set up magnetometer connection
       this.magnetometer = new Magnetometer({
-        controller: LSM303DLH,
+        controller: 'HMC5883L',
         frequency: this.options.frequency
       });
 
-      this.magnetometer.on('data', this.onMagnetometerUpdate);
-      this.updateLoop = setInterval(this.updateState, 500);
+      // Make sure everything is powered off at start
+      this.depowerCharacterPins();
+      this.loop();
     });
   }
 
   depowerCharacterPins = () => {
     if (this.characterPins) {
-      console.log('DEPOWER PINS');
+      console.log('Depowering character pins');
       this.characterPins.forEach(pin => pin.low());
     }
+  }
+
+  loop = () => {
+    this.updateState().then(this.loop);
   }
 
   stop = () => {
@@ -58,109 +99,78 @@ class Board {
     this.depowerCharacterPins();
   }
 
-  resetMagnetometerValues = () => {
-    this.magnetometerValues = {
-      x: [0, 0, 0],
-      y: [0, 0, 0],
-      z: [0, 0, 0]
-    };
-  }
-
-  updateMagnetometerValues = (heading) => {
-    ['x', 'y', 'z'].forEach(dimension => {
-      const dimensionValues = this.magnetometerValues[dimension];
-      dimensionValues.shift();
-      dimensionValues.push(heading[dimension]);
-    });
-  }
-
-  getMagnetometerAcceleration = () => {
-    const {x, y, z} = this.magnetometerValues;
-    const {frequency} = this.options;
-    const timeDifference = 1000/frequency;
-
-    console.log(x);
-
-    return {
-      x: threePointSecondDerivative(...x, timeDifference),
-      y: threePointSecondDerivative(...y, timeDifference),
-      z: threePointSecondDerivative(...z, timeDifference)
-    };
-  };
-
-  onMagnetometerUpdate = ({heading}) => {
-    // const {x, y, z} = heading;
-    if (this.updating) {
-      const {threshold} = this.options;
-      this.updateMagnetometerValues(heading);
-      const acceleration = this.getMagnetometerAcceleration();
-
-      if (!this.endingCurrentCharacterUpdate && Math.abs(acceleration.x) > threshold) {
-        // If we detect acceleration when the character power was turned on, add character as active
-        this.activeCharacters.push(this.currentCharacterIndex);
-
-        // Start pulse end
-        this.endingCurrentCharacterUpdate = true;
-
-        // Stop power for current character
-        this.currentCharacterPin.low();
-      }
-
-      // Wait for the magnet pulse to properly end before pulsing the next character.
-      // This avoids the magnetometer to be triggered by the residue from the previous pulse.
-      if (this.endingCurrentCharacterUpdate && Math.abs(acceleration.x) < threshold - 1) {
-        this.endCurrentCharacterUpdate();
-      }
-    }
-  }
-
   getState() {
-    return this.activeCharacters || [];
+    return this.state;
   }
 
   updateState = () => {
-    this.activeCharacters = [];
-    this.startUpdate();
+    //  clear state
+    //
+    //  for each location
+    //    select multiplexer location
+    //
+    //    for each character
+    //      pulse character
+    //        if magnetometer reported acceleration during pulse
+    //          set character as active in location
+
+    // For each location
+    const locationUpdates = this.options.locationIds.map(locationId => (state, locationCallback) => {
+      this.multiplexer.select(locationId);
+
+      // Pulse characters
+      const characterUpdates = this.characterPins.map(characterPin => (characters, characterCallback) => {
+        let magnetometerValues = createMagnetometerValues();
+
+        const trackCurrentCharacter = ({heading}) => {
+          magnetometerValues = updateMagnetometerValues(magnetometerValues, heading);
+          const accelerationValues = getAcceleration(magnetometerValues, this.opts.frequency);
+          const acceleration = totalAcceleration(accelerationValues);
+
+          if (totalAcceleration > threshold) {
+            // Set character to state
+            // TODO: dedupe characters
+            characters.push(characterPin.pin);
+          }
+        };
+        this.magnetometer.on('data', trackCurrentCharacter);
+
+        // Perform pulse by waiting 100ms, pulsing 100ms and waiting 100ms.
+        // This allows the magnet field to properly reset before and after the pulse.
+        // Otherwise the previous pulse might still register in the next character's pulse period.
+        setTimeout(() => {
+          // Power on current character pin
+          characterPin.high();
+
+          setTimeout(() => {
+            // Power off current character pin
+            characterPin.low();
+
+            setTimeout(() => {
+              this.magnetometer.off('data', trackCurrentCharacter);
+              characterCallback(characters);
+            }, 100);
+          }, 100);
+        }, 100);
+      });
+
+      series(
+        [constant([])].concat(characterUpdates),
+        (err, activeCharactersInLocation) => locationCallback({
+          ...state,
+          [locationId]: activeCharactersInLocation
+        });
+      );
+    });
+
+    series(
+      [constant({})].concat(locationUpdates),
+      (err, newState) => this.state = newState
+    );
   }
 
-  startUpdate = () => {
-    // Pulse through character pins and update state, starting from the first pin
-    this.currentCharacterIndex = 0;
-    this.updateCurrentCharacter();
-  }
-
-  updateCurrentCharacter = () => {
-    this.endingCurrentCharacterUpdate = false;
-    this.updating = true;
-
-    // Start power for current character
-    this.currentCharacterPin = this.characterPins[this.currentCharacterIndex];
-    this.currentCharacterPin.high();
-
-    // Schedule pulse to end after 100ms
-    this.deferredEndUpdate = setTimeout(this.endCurrentCharacterUpdate, 100);
-  }
-
-  endCurrentCharacterUpdate = () => {
-    // Clear timeout if update end was called manually earlier
-    clearTimeout(this.deferredEndUpdate);
-
-    // Reset magnetometer state
-    this.updating = false;
-    this.resetMagnetometerValues();
-
-    if (this.currentCharacterIndex < this.characterPins.length - 1) {
-      // If this was not the last character, start pulsing the next one
-      this.currentCharacterIndex++;
-      this.updateCurrentCharacter();
-    } else {
-      this.endUpdate();
-    }
-  }
-
-  endUpdate = () => {
-    this.updating = false;
-    this.resetMagnetometerValues();
+  indicateLocation = (location) => {
+    // TODO
   }
 }
 
