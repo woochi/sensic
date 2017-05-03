@@ -1,5 +1,7 @@
-import circus from './circus';
+import threeLittlePiggies from './threeLittlePiggies';
+import littleRedRidingHood from './littleRedRidingHood';
 
 export default [
-  circus
+  threeLittlePiggies,
+  littleRedRidingHood
 ];
