@@ -42,7 +42,7 @@ function totalAcceleration({x, y, z}) {
 class Board {
   constructor(options) {
     this.options = {
-      threshold: 0.6,
+      threshold: 1,
       frequency: 50,
       characterPins: [],
       locationIds: [0, 1, 2, 3, 4],
@@ -111,12 +111,6 @@ class Board {
     }
   }
 
-  // Queue a method to be called at the end of the update loop
-  // before starting a new update. Used e.g. for controlling LEDs.
-  queue = (routine) => {
-    this.queue.push(routine);
-  }
-
   loop = () => {
     this.updateState().then(newState => {
       console.log(newState);
@@ -126,8 +120,12 @@ class Board {
       }
       this.state = newState;
 
+      console.log('QUEUE', this.queue.length);
       if (this.queue.length) {
-        series(this.queue, this.loop);
+        series(this.queue, () => {
+          this.queue = [];
+          this.loop();
+        });
       } else {
         this.loop();
       }
@@ -268,23 +266,33 @@ class Board {
 
   getLedForLocation = location => {
     const ledIndex = this.options.locationIds.findIndex(id => id === location);
-    return this.leds[ledIndex];
+
+    if (ledIndex >= 0) {
+      return this.leds[ledIndex];
+    }
+
+    return null;
   }
 
   fadeInLocationLed = (location, color = 'blue') => callback => {
     const led = this.getLedForLocation(location);
 
-    this.multiplexer.select(this.options.ledServoPort);
-    led.color(color);
-    led.on();
+    if (led) {
+      this.multiplexer.select(this.options.ledServoPort);
+      led.color(color);
+    }
+
     callback();
   }
 
   fadeOutLocationLed = location => callback => {
     const led = this.getLedForLocation(location);
 
-    this.multiplexer.select(this.options.ledServoPort);
-    led.off();
+    if (led) {
+      this.multiplexer.select(this.options.ledServoPort);
+      led.off();
+    }
+
     callback();
   }
 

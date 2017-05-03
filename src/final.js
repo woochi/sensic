@@ -11,85 +11,69 @@ import {
 import gameReducer from './game/gameReducer';
 import stories from './stories';
 import Board from './board';
-import {difference, uniq} from 'lodash';
+import {difference, uniq, omit} from 'lodash';
 
-function play(currentState) {
-  const {story, currentStep} = currentState;
-  const requiredAction = story.solution[currentStep];
-  const {type, payload} = requiredAction;
-
-  if (type === speak.toString()) {
-    say.speak(requiredAction.payload, 'Daniel', 1.0, () => {
-      const newState = gameReducer(gameState, requiredAction);
-      gameState = play(newState);
-    });
-  } else if (
-    [
-      indicateLocation.toString(),
-      indicateSuccess.toString()
-    ].includes(type)
-  ) {
-    console.log('ACTION', type);
-    updateGameState(play(gameReducer(currentState, requiredAction)));
-    console.log('AFTER ACTION', gameState.indicators);
-  }
-
-  return currentState;
+function isAutomaticAction(action) {
+  return [
+    speak.toString(),
+    indicateLocation.toString(),
+    indicateSuccess.toString()
+  ].includes(action.type);
 }
 
 function advance(currentState) {
   const {story, currentStep} = currentState;
   const requiredAction = story.solution[currentStep];
+  const {type} = requiredAction;
+  const nextState = gameReducer(currentState, requiredAction);
 
-  if (currentState.completed) {
-    console.log('Story has been completed!');
-    return;
+  console.log('Advancing', requiredAction);
+
+  if (type === speak.toString()) {
+    say.speak(requiredAction.payload, 'Daniel', 1.0, () => {
+      checkRequiredAction(updateGameState(nextState));
+    });
+  } else {
+    checkRequiredAction(updateGameState(nextState));
   }
+}
 
-  if (requiredAction.type === speak.toString()) {
-    say.speak(requiredAction.payload, 'Daniel', 1.0);
+function getNextAction(state) {
+  const {story, currentStep} = state;
+
+  return story.solution[currentStep];
+}
+
+function checkRequiredAction(state) {
+  const requiredAction = getNextAction(state);
+
+  console.log('IS AUTOMATIC?', isAutomaticAction(requiredAction));
+  if (requiredAction && isAutomaticAction(requiredAction)) {
+    advance(state);
   }
-
-  console.log('Simulating action', requiredAction);
-
-  return gameReducer(currentState, requiredAction);
 }
 
 function onBoardChange(nextState) {
-  console.log('CHANGE', nextState.errors);
+  console.log('BOARD CHANGE', nextState);
   const currentState = gameState;
 
   // TODO: Trigger actions for character adds and removes
-  const locations = uniq(Object.keys(currentState).concat(Object.keys(nextState)));
+  const locations = uniq(Object.keys(currentState).concat(Object.keys(nextState))) || [];
   let newGameState = gameState;
 
   locations.forEach(location => {
-    const currentCharacters = currentState[location] || [];
-    const nextCharacters = nextState[location] || [];
-    const addedCharacters = difference(nextCharacters, currentCharacters);
-    const removedCharacters = difference(currentCharacters, nextCharacters);
+    const characters = nextState[location] || [];
 
-    if (addedCharacters.length) {
-      newGameState = addedCharacters.reduce((state, character) => {
-        return gameReducer(state, addCharacter(character, location));
-      }, newGameState);
-    }
-
-    if (removedCharacters.length) {
-      newGameState = removedCharacters.reduce((state, character) => {
-        return gameReducer(state, removeCharacter(character, location));
-      }, newGameState);
-    }
+    characters.forEach(character => {
+      newGameState = gameReducer(newGameState, addCharacter(character, location));
+    });
   });
 
-  //console.log('NEXT', newGameState);
-
-  updateGameState(newGameState);
+  checkRequiredAction(updateGameState(newGameState));
 }
 
 function updateGameState(newGameState) {
   board.clearIndicators();
-  console.log('CLEARED');
   gameState = newGameState;
   const {errors, indicators} = gameState;
 
@@ -101,7 +85,7 @@ function updateGameState(newGameState) {
     indicators.forEach(({location}) => board.indicateLocation(location))
   }
 
-  play(gameState);
+  return newGameState;
 }
 
 const {stdin, stdout} = process;
@@ -124,7 +108,7 @@ stdin.on('data', (key, test) => {
 
   // Advance story manually
   if (key === '\r' && gameState && gameState.story) {
-    updateGameState(advance(gameState));
+    advance(gameState);
   }
 
   // Load story on number press
@@ -132,7 +116,7 @@ stdin.on('data', (key, test) => {
   if (number >= 0) {
     if (number < stories.length) {
       const story = stories[number];
-      gameState = play(gameReducer(gameState, loadStory(story)));
+      checkRequiredAction(updateGameState(gameReducer(gameState, loadStory(story))));
       console.log('Loaded story: ' + story.name);
       board.start();
     } else {

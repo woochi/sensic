@@ -72,7 +72,7 @@ function validateBoardState(boardState, story, currentStep) {
   }
 
   console.log('VALIDATE STEP', currentStep + 1);
-  const expectedBoardState = story.solution.slice(0, currentStep + 2)
+  const expectedBoardState = story.solution.slice(0, currentStep + 1)
     .reduce((currentState, action) =>
       gameBoardReducer(currentState, action)
     , {});
@@ -92,22 +92,23 @@ function validateBoardState(boardState, story, currentStep) {
     })));
   }, []);
 
+  console.log(invalidCharacterErrors);
   return invalidCharacterErrors;
 }
 
 const indicatorReducer = handleActions({
   [indicateLocation]: (state, action) => {
-    return state.concat({
+    return [{
       location: action.payload,
       color: 'blue'
-    });
+    }];
   },
 
   [indicateSuccess]: (state, action) => {
-    return state.concat({
+    return [{
       location: action.payload,
       color: 'green'
-    });
+    }];
   },
 
   [clearIndicators]: (state, action) => {
@@ -127,9 +128,7 @@ function gameReducer(state = initialState, action) {
     };
   }
 
-  console.log('ACTION', action);
   const newBoardState = gameBoardReducer(state.board, action);
-  console.log(omit(newBoardState, 'story'));
 
   if (newBoardState === state.board) {
     return state;
@@ -139,7 +138,6 @@ function gameReducer(state = initialState, action) {
   const completed = !!state.story && !errors.length && state.currentStep === state.story.solution.length - 1;
   const currentStep = (errors.length || state.board === newBoardState) ? state.currentStep : state.currentStep + 1;
 
-  console.log('STEP', currentStep);
   return {
     ...state,
     currentStep,
