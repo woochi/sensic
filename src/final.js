@@ -6,7 +6,8 @@ import {
   indicateLocation,
   indicateSuccess,
   addCharacter,
-  removeCharacter
+  removeCharacter,
+  change
 } from './game/gameActions';
 import gameReducer from './game/gameReducer';
 import stories from './stories';
@@ -53,25 +54,6 @@ function checkRequiredAction(state) {
   }
 }
 
-function onBoardChange(nextState) {
-  console.log('BOARD CHANGE', nextState);
-  const currentState = gameState;
-
-  // TODO: Trigger actions for character adds and removes
-  const locations = uniq(Object.keys(currentState).concat(Object.keys(nextState))) || [];
-  let newGameState = gameState;
-
-  locations.forEach(location => {
-    const characters = nextState[location] || [];
-
-    characters.forEach(character => {
-      newGameState = gameReducer(newGameState, addCharacter(character, location));
-    });
-  });
-
-  checkRequiredAction(updateGameState(newGameState));
-}
-
 function updateGameState(newGameState) {
   board.clearIndicators();
   gameState = newGameState;
@@ -92,7 +74,10 @@ const {stdin, stdout} = process;
 let gameState = undefined;
 const board = new Board({
   characterPins: [8, 9, 10, 11, 12],
-  onChange: onBoardChange
+  onChange: (boardState) => {
+    const nextGameState = gameReducer(gameState, change(boardState));
+    checkRequiredAction(updateGameState(nextGameState));
+  }
 });
 
 stdin.resume();

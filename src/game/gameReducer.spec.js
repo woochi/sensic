@@ -8,7 +8,7 @@ import {
   removeCharacter
 } from './gameActions';
 
-describe.only('gameReducer', function() {
+describe('gameReducer', function() {
 
   describe('loading a simple story', function() {
     before(function() {

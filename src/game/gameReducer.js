@@ -6,9 +6,11 @@ import {
   speak,
   indicateLocation,
   indicateSuccess,
-  clearIndicators
+  clearIndicators,
+  change,
+  moveCharacter
 } from './gameActions';
-import {difference, omit, union, without} from 'lodash';
+import {difference, omit, union, without, intersection} from 'lodash';
 
 const initialState = {
   currentStep: 0,
@@ -20,27 +22,30 @@ const initialState = {
 
 const gameBoardReducer = handleActions({
   [addCharacter]: (state, action) => {
-    const {character, location} = action.payload;
+    const {characters, location} = action.payload;
     const existingCharacters = state[location] || [];
 
-    if (existingCharacters.includes(character)) {
+    // If characters already exist in location
+    if (intersection(characters, existingCharacters).length === characters.length) {
       return state;
     }
 
     return {
       ...state,
-      [location]: union(state[location], [character])
+      [location]: union(existingCharacters, characters)
     }
   },
 
   [removeCharacter]: (state, action) => {
-    const {character, location} = action.payload;
+    const {characters, location} = action.payload;
+    const existingCharacters = state[location] || [];
 
-    if (!state[location] || !state[location].includes(character)) {
+    // If none of the characters exist in location
+    if (!intersection(characters, existingCharacters)) {
       return state;
     }
 
-    const newCharacters = without(state[location], character);
+    const newCharacters = difference(existingCharacters, characters);
 
     if (!newCharacters.length) {
       return omit(state, location);
@@ -48,8 +53,24 @@ const gameBoardReducer = handleActions({
 
     return {
       ...state,
-      [location]: without(state[location], character)
+      [location]: newCharacters
     };
+  },
+
+  [moveCharacter]: (state, action) => {
+    const {characters, from, to} = action.payload;
+    const originCharacters = state[from] || [];
+    const targetCharacters = state[to] || [];
+
+    if (!intersection(characters, originCharacters).length) {
+      return state;
+    }
+
+    return {
+      ...state,
+      [from]: difference(originCharacters, characters),
+      [to]: targetCharacters.concat(characters)
+    }
   },
 
   [speak]: (state, action) => {
@@ -65,18 +86,17 @@ const gameBoardReducer = handleActions({
   }
 }, {});
 
-
 function validateBoardState(boardState, story, currentStep) {
   if (!boardState || !story) {
     return [];
   }
 
-  console.log('VALIDATE STEP', currentStep + 1);
   const expectedBoardState = story.solution.slice(0, currentStep + 1)
     .reduce((currentState, action) =>
       gameBoardReducer(currentState, action)
     , {});
 
+  console.log('GOT', boardState);
   console.log('EXPECTING', expectedBoardState);
 
   const invalidCharacterErrors = Object.keys(boardState).reduce((errors, location) => {
@@ -84,7 +104,6 @@ function validateBoardState(boardState, story, currentStep) {
       return errors;
     }
 
-    console.log(boardState, expectedBoardState);
     const extraCharacters = difference(boardState[location], expectedBoardState[location]);
     return errors.concat(extraCharacters.map(character => ({
       location: parseInt(location),
@@ -126,9 +145,19 @@ function gameReducer(state = initialState, action) {
       ...initialState,
       story: action.payload
     };
+  } else if (action.type === speak.toString()) {
+    return {
+      ...state,
+      currentStep: state.currentStep + 1
+    };
   }
 
-  const newBoardState = gameBoardReducer(state.board, action);
+  let newBoardState;
+  if (action.type === change.toString()) {
+    newBoardState = action.payload;
+  } else {
+    newBoardState = gameBoardReducer(state.board, action);
+  }
 
   if (newBoardState === state.board) {
     return state;
