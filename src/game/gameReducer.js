@@ -1,13 +1,12 @@
 import {handleActions} from 'redux-actions';
 import {
   loadStory,
-  addLocation,
-  removeLocation,
   addCharacter,
   removeCharacter,
   speak,
   indicateLocation,
-  indicateSuccess
+  indicateSuccess,
+  clearIndicators
 } from './gameActions';
 import {difference, omit, union, without} from 'lodash';
 
@@ -15,38 +14,16 @@ const initialState = {
   currentStep: 0,
   errors: [],
   story: null,
-  board: {}
+  board: {},
+  indicators: []
 };
 
 const gameBoardReducer = handleActions({
-  [addLocation]: (state, action) => {
-    const {payload: location} = action;
-
-    if (state[location]) {
-      return state;
-    }
-
-    return {
-      ...state,
-      [location]: []
-    };
-  },
-
-  [removeLocation]: (state, action) => {
-    const {payload: location} = action;
-
-    if (!state[location]) {
-      return state;
-    }
-
-    return omit(state, location);
-  },
-
   [addCharacter]: (state, action) => {
     const {character, location} = action.payload;
     const existingCharacters = state[location] || [];
 
-    if (!state[location] || existingCharacters.includes(character)) {
+    if (existingCharacters.includes(character)) {
       return state;
     }
 
@@ -61,6 +38,12 @@ const gameBoardReducer = handleActions({
 
     if (!state[location] || !state[location].includes(character)) {
       return state;
+    }
+
+    const newCharacters = without(state[location], character);
+
+    if (!newCharacters.length) {
+      return omit(state, location);
     }
 
     return {
@@ -88,26 +71,20 @@ function validateBoardState(boardState, story, currentStep) {
     return [];
   }
 
-  const expectedBoardState = story.solution.slice(0, currentStep + 1)
+  console.log('VALIDATE STEP', currentStep + 1);
+  const expectedBoardState = story.solution.slice(0, currentStep + 2)
     .reduce((currentState, action) =>
       gameBoardReducer(currentState, action)
     , {});
 
-  const expectedLocations = Object.keys(expectedBoardState);
-  const currentLocations = Object.keys(boardState);
-  const invalidLocationErrors = difference(currentLocations, expectedLocations).map(location => ({
-    location: parseInt(location),
-    message: `Invalid location ${location} on board`
-  }));
-  const missingLocationErrors = difference(expectedLocations, currentLocations).map(location => ({
-    location: parseInt(location),
-    message: `Missing location ${location} from board`
-  }));
+  console.log('EXPECTING', expectedBoardState);
 
   const invalidCharacterErrors = Object.keys(boardState).reduce((errors, location) => {
     if (!expectedBoardState[location]) {
       return errors;
     }
+
+    console.log(boardState, expectedBoardState);
     const extraCharacters = difference(boardState[location], expectedBoardState[location]);
     return errors.concat(extraCharacters.map(character => ({
       location: parseInt(location),
@@ -115,10 +92,28 @@ function validateBoardState(boardState, story, currentStep) {
     })));
   }, []);
 
-  return invalidLocationErrors
-    .concat(missingLocationErrors)
-    .concat(invalidCharacterErrors);
+  return invalidCharacterErrors;
 }
+
+const indicatorReducer = handleActions({
+  [indicateLocation]: (state, action) => {
+    return state.concat({
+      location: action.payload,
+      color: 'blue'
+    });
+  },
+
+  [indicateSuccess]: (state, action) => {
+    return state.concat({
+      location: action.payload,
+      color: 'green'
+    });
+  },
+
+  [clearIndicators]: (state, action) => {
+    return [];
+  }
+}, []);
 
 function gameReducer(state = initialState, action) {
   if (state.completed) {
@@ -132,7 +127,9 @@ function gameReducer(state = initialState, action) {
     };
   }
 
+  console.log('ACTION', action);
   const newBoardState = gameBoardReducer(state.board, action);
+  console.log(omit(newBoardState, 'story'));
 
   if (newBoardState === state.board) {
     return state;
@@ -142,11 +139,13 @@ function gameReducer(state = initialState, action) {
   const completed = !!state.story && !errors.length && state.currentStep === state.story.solution.length - 1;
   const currentStep = (errors.length || state.board === newBoardState) ? state.currentStep : state.currentStep + 1;
 
+  console.log('STEP', currentStep);
   return {
     ...state,
     currentStep,
     completed,
     errors,
+    indicators: indicatorReducer(state.indicators, action),
     board: newBoardState
   };
 };
