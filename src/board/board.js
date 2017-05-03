@@ -1,4 +1,4 @@
-import {Board as ArduinoBoard, Magnetometer, Pin, Expander} from 'johnny-five';
+import {Board as ArduinoBoard, Magnetometer, Pin, Expander, Led} from 'johnny-five';
 import {threePointSecondDerivative} from './differential';
 import invariant from 'invariant';
 import Multiplexer from './multiplexer';
@@ -42,10 +42,10 @@ function totalAcceleration({x, y, z}) {
 class Board {
   constructor(options) {
     this.options = {
-      threshold: 4,
+      threshold: 0.6,
       frequency: 50,
       characterPins: [],
-      locationIds: [0, 1, 2, 3, 4, 5],
+      locationIds: [0, 1, 2, 3, 4],
       ledServoPort: 7,
       onChange: () => {},
       ...options
@@ -78,13 +78,20 @@ class Board {
     this.servo = new Expander({
       controller: 'PCA9685'
     });
-    const servoBoard = new Board.Virtual(servo);
+    const servoBoard = new ArduinoBoard.Virtual(this.servo);
     this.leds = [0, 1, 2, 3, 4].map(i => {
       const offset = i * 3;
       return new Led.RGB({
         pins: {red: offset, green: offset + 1, blue: offset + 2},
         board: servoBoard
       });
+    });
+
+    this.multiplexer.select(7);
+
+    this.leds.forEach(led => {
+      led.intensity(10);
+      led.color('#00FF00');
     });
 
     // Make sure everything is powered off at start
@@ -126,7 +133,7 @@ class Board {
       }
     })
     .catch(error => {
-      console.log('Error while running the update', error);
+      console.log('Error while running the update', error, error.stack);
       this.stop();
     });
   }
@@ -136,6 +143,10 @@ class Board {
 
     console.log('Turning character pin powers low');
     this.depowerCharacterPins();
+
+    console.log('Turning indicators off');
+    this.multiplexer.select(7);
+    this.leds.forEach(led => led.off());
   }
 
   getState() {
@@ -145,14 +156,18 @@ class Board {
   onMagnetometerUpdate = ({heading}) => {
     const {frequency, threshold} = this.options;
     this.magnetometerValues = updateMagnetometerValues(this.magnetometerValues, heading);
-    const accelerationValues = getAcceleration(this.magnetometerValues, frequency);
-    const acceleration = totalAcceleration(accelerationValues);
+    //console.log('RAW', heading);
 
-    //console.log(acceleration);
-    if (acceleration > threshold) {
-      // Set character to state
-      // TODO: dedupe characters
-      this.activeCharactersInLocation = uniq(this.activeCharactersInLocation.concat(this.characterId));
+    if (this.updating) {
+      const accelerationValues = getAcceleration(this.magnetometerValues, frequency);
+      const acceleration = totalAcceleration(accelerationValues);
+      //console.log('UPDATING', acceleration);
+
+      if (acceleration > threshold) {
+        // Set character to state
+        // TODO: dedupe characters
+        this.activeCharactersInLocation = uniq(this.activeCharactersInLocation.concat(this.characterId));
+      }
     }
   }
 
@@ -169,6 +184,7 @@ class Board {
       //          set character as active in location
 
       // For each location
+
       const locationUpdates = this.options.locationIds.map(locationId => (state, locationCallback) => {
         this.activeCharactersInLocation = [];
         this.locationId = locationId;
@@ -183,21 +199,32 @@ class Board {
           // Perform pulse by waiting 100ms, pulsing 100ms and waiting 100ms.
           // This allows the magnet field to properly reset before and after the pulse.
           // Otherwise the previous pulse might still register in the next character's pulse period.
+
           setTimeout(() => {
-            //console.log('HIGH');
+            this.updating = true;
+
             // Power on current character pin
             characterPin.high();
+            //console.log('HIGH');
+            this.updating = true;
 
             setTimeout(() => {
-              //console.log('LOW');
+
               // Power off current character pin
               characterPin.low();
+              //console.log('LOW');
+
 
               setTimeout(() => {
-                //console.log('CALLBACK');
-                characterCallback(null, this.activeCharactersInLocation);
-              }, 100);
-            }, 100);
+                this.updating = false;
+                //console.log('STOP TRACKING');
+
+                setTimeout(() => {
+                  //console.log('CALLBACK');
+                  characterCallback(null, this.activeCharactersInLocation);
+                }, 100);
+              }, 50);
+            }, 120);
           }, 100);
         });
 
@@ -239,38 +266,45 @@ class Board {
     });
   }
 
+  getLedForLocation = location => {
+    const ledIndex = this.options.locationIds.findIndex(id => id === location);
+    return this.leds[ledIndex];
+  }
+
   fadeInLocationLed = (location, color = 'blue') => callback => {
-    const led = this.leds[location];
+    const led = this.getLedForLocation(location);
 
     this.multiplexer.select(this.options.ledServoPort);
     led.color(color);
-    led.fadeIn(250, callback);
+    led.on();
+    callback();
   }
 
   fadeOutLocationLed = location => callback => {
-    const led = this.leds[location];
+    const led = this.getLedForLocation(location);
 
     this.multiplexer.select(this.options.ledServoPort);
-    led.fadeOut(250, callback);
+    led.off();
+    callback();
   }
 
   clearIndication = location => {
-    this.queue(this.fadeOutLocationLed(location));
+    this.queue.push(this.fadeOutLocationLed(location));
   }
 
   indicateLocation = location => {
-    this.queue(this.fadeInLocationLed(location, 'blue'));
+    this.queue.push(this.fadeInLocationLed(location, 'blue'));
   }
 
   indicateSuccess = location => {
-    this.queue(this.fadeInLocationLed(location, 'green'));
+    this.queue.push(this.fadeInLocationLed(location, 'green'));
   }
 
   indicateError = location => {
-    this.queue(this.fadeInLocationLed(location, 'red'));
+    this.queue.push(this.fadeInLocationLed(location, 'red'));
   }
 
-  clearIndications = () => {
+  clearIndicators = () => {
     this.options.locationIds.forEach(this.clearIndication);
   }
 }
