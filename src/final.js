@@ -6,16 +6,12 @@ import {
   indicateLocation,
   indicateSuccess,
   addCharacter,
-  removeCharacter,
-  addLocation
+  removeCharacter
 } from './game/gameActions';
 import gameReducer from './game/gameReducer';
 import stories from './stories';
 import Board from './board';
-
-function updateGameState() {
-  const activeCharacters = board.getState();
-}
+import {difference, uniq} from 'lodash';
 
 function play(currentState) {
   const {story, currentStep} = currentState;
@@ -31,9 +27,11 @@ function play(currentState) {
     [
       indicateLocation.toString(),
       indicateSuccess.toString()
-    ].includes(requiredAction.type)
+    ].includes(type)
   ) {
-    return play(gameReducer(currentState, requiredAction));
+    console.log('ACTION', type);
+    updateGameState(play(gameReducer(currentState, requiredAction)));
+    console.log('AFTER ACTION', gameState.indicators);
   }
 
   return currentState;
@@ -57,12 +55,61 @@ function advance(currentState) {
   return gameReducer(currentState, requiredAction);
 }
 
+function onBoardChange(nextState) {
+  console.log('CHANGE', nextState.errors);
+  const currentState = gameState;
+
+  // TODO: Trigger actions for character adds and removes
+  const locations = uniq(Object.keys(currentState).concat(Object.keys(nextState)));
+  let newGameState = gameState;
+
+  locations.forEach(location => {
+    const currentCharacters = currentState[location] || [];
+    const nextCharacters = nextState[location] || [];
+    const addedCharacters = difference(nextCharacters, currentCharacters);
+    const removedCharacters = difference(currentCharacters, nextCharacters);
+
+    if (addedCharacters.length) {
+      newGameState = addedCharacters.reduce((state, character) => {
+        return gameReducer(state, addCharacter(character, location));
+      }, newGameState);
+    }
+
+    if (removedCharacters.length) {
+      newGameState = removedCharacters.reduce((state, character) => {
+        return gameReducer(state, removeCharacter(character, location));
+      }, newGameState);
+    }
+  });
+
+  //console.log('NEXT', newGameState);
+
+  updateGameState(newGameState);
+}
+
+function updateGameState(newGameState) {
+  board.clearIndicators();
+  console.log('CLEARED');
+  gameState = newGameState;
+  const {errors, indicators} = gameState;
+
+  if (errors) {
+    errors.forEach(({location}) => board.indicateError(location));
+  }
+
+  if (indicators) {
+    indicators.forEach(({location}) => board.indicateLocation(location))
+  }
+
+  play(gameState);
+}
+
 const {stdin, stdout} = process;
 let gameState = undefined;
 const board = new Board({
-  characterPins: [2, 3, 4, 5]
+  characterPins: [8, 9, 10, 11, 12],
+  onChange: onBoardChange
 });
-const loop = setInterval(updateGameState, 500);
 
 stdin.resume();
 stdin.setEncoding( 'utf8' );
@@ -71,14 +118,13 @@ stdin.on('data', (key, test) => {
   // On CTRL+C (exit)
   if ( key === '\u0003' ) {
     console.log('Exiting');
-    clearInterval(loop);
     board.stop();
     process.exit();
   }
 
   // Advance story manually
   if (key === '\r' && gameState && gameState.story) {
-    gameState = advance(gameState);
+    updateGameState(advance(gameState));
   }
 
   // Load story on number press
@@ -88,6 +134,7 @@ stdin.on('data', (key, test) => {
       const story = stories[number];
       gameState = play(gameReducer(gameState, loadStory(story)));
       console.log('Loaded story: ' + story.name);
+      board.start();
     } else {
       console.log(`Invalid story number. Select one of the stories by pressing: ${[...Array(stories.length).keys().map((_, i) => i + 1)].join()}`);
     }
