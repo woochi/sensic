@@ -1,72 +1,90 @@
 import {handleActions} from 'redux-actions';
 import {
   loadStory,
-  addLocation,
-  removeLocation,
   addCharacter,
-  removeCharacter
+  removeCharacter,
+  speak,
+  indicateLocation,
+  indicateSuccess,
+  clearIndicators,
+  change,
+  moveCharacter
 } from './gameActions';
-import {difference, omit, union, without} from 'lodash';
+import {difference, omit, union, without, intersection} from 'lodash';
 
 const initialState = {
   currentStep: 0,
   errors: [],
   story: null,
-  board: {}
+  board: {},
+  indicators: []
 };
 
 const gameBoardReducer = handleActions({
-  [addLocation]: (state, action) => {
-    const {payload: location} = action;
-
-    if (state[location]) {
-      return state;
-    }
-
-    return {
-      ...state,
-      [location]: []
-    };
-  },
-
-  [removeLocation]: (state, action) => {
-    const {payload: location} = action;
-
-    if (!state[location]) {
-      return state;
-    }
-
-    return omit(state, location);
-  },
-
   [addCharacter]: (state, action) => {
-    const {character, location} = action.payload;
+    const {characters, location} = action.payload;
     const existingCharacters = state[location] || [];
 
-    if (!state[location] || existingCharacters.includes(character)) {
+    // If characters already exist in location
+    if (intersection(characters, existingCharacters).length === characters.length) {
       return state;
     }
 
     return {
       ...state,
-      [location]: union(state[location], [character])
+      [location]: union(existingCharacters, characters)
     }
   },
 
   [removeCharacter]: (state, action) => {
-    const {character, location} = action.payload;
+    const {characters, location} = action.payload;
+    const existingCharacters = state[location] || [];
 
-    if (!state[location] || !state[location].includes(character)) {
+    // If none of the characters exist in location
+    if (!intersection(characters, existingCharacters)) {
+      return state;
+    }
+
+    const newCharacters = difference(existingCharacters, characters);
+
+    if (!newCharacters.length) {
+      return omit(state, location);
+    }
+
+    return {
+      ...state,
+      [location]: newCharacters
+    };
+  },
+
+  [moveCharacter]: (state, action) => {
+    const {characters, from, to} = action.payload;
+    const originCharacters = state[from] || [];
+    const targetCharacters = state[to] || [];
+
+    if (!intersection(characters, originCharacters).length) {
       return state;
     }
 
     return {
       ...state,
-      [location]: without(state[location], character)
-    };
+      [from]: difference(originCharacters, characters),
+      [to]: targetCharacters.concat(characters)
+    }
+  },
+
+  [speak]: (state, action) => {
+    return {...state};
+  },
+
+  [indicateLocation]: (state, action) => {
+    return {...state};
+  },
+
+  [indicateSuccess]: (state, action) => {
+    return {...state};
   }
 }, {});
-
 
 function validateBoardState(boardState, story, currentStep) {
   if (!boardState || !story) {
@@ -78,21 +96,14 @@ function validateBoardState(boardState, story, currentStep) {
       gameBoardReducer(currentState, action)
     , {});
 
-  const expectedLocations = Object.keys(expectedBoardState);
-  const currentLocations = Object.keys(boardState);
-  const invalidLocationErrors = difference(currentLocations, expectedLocations).map(location => ({
-    location: parseInt(location),
-    message: `Invalid location ${location} on board`
-  }));
-  const missingLocationErrors = difference(expectedLocations, currentLocations).map(location => ({
-    location: parseInt(location),
-    message: `Missing location ${location} from board`
-  }));
+  console.log('GOT', boardState);
+  console.log('EXPECTING', expectedBoardState);
 
   const invalidCharacterErrors = Object.keys(boardState).reduce((errors, location) => {
     if (!expectedBoardState[location]) {
       return errors;
     }
+
     const extraCharacters = difference(boardState[location], expectedBoardState[location]);
     return errors.concat(extraCharacters.map(character => ({
       location: parseInt(location),
@@ -100,10 +111,29 @@ function validateBoardState(boardState, story, currentStep) {
     })));
   }, []);
 
-  return invalidLocationErrors
-    .concat(missingLocationErrors)
-    .concat(invalidCharacterErrors);
+  console.log(invalidCharacterErrors);
+  return invalidCharacterErrors;
 }
+
+const indicatorReducer = handleActions({
+  [indicateLocation]: (state, action) => {
+    return [{
+      location: action.payload,
+      color: 'blue'
+    }];
+  },
+
+  [indicateSuccess]: (state, action) => {
+    return [{
+      location: action.payload,
+      color: 'green'
+    }];
+  },
+
+  [clearIndicators]: (state, action) => {
+    return [];
+  }
+}, []);
 
 function gameReducer(state = initialState, action) {
   if (state.completed) {
@@ -115,9 +145,19 @@ function gameReducer(state = initialState, action) {
       ...initialState,
       story: action.payload
     };
+  } else if (action.type === speak.toString()) {
+    return {
+      ...state,
+      currentStep: state.currentStep + 1
+    };
   }
 
-  const newBoardState = gameBoardReducer(state.board, action);
+  let newBoardState;
+  if (action.type === change.toString()) {
+    newBoardState = action.payload;
+  } else {
+    newBoardState = gameBoardReducer(state.board, action);
+  }
 
   if (newBoardState === state.board) {
     return state;
@@ -125,12 +165,14 @@ function gameReducer(state = initialState, action) {
 
   const errors = validateBoardState(newBoardState, state.story, state.currentStep);
   const completed = !!state.story && !errors.length && state.currentStep === state.story.solution.length - 1;
+  const currentStep = (errors.length || state.board === newBoardState) ? state.currentStep : state.currentStep + 1;
 
   return {
     ...state,
-    currentStep: (errors.length || state.board === newBoardState) ? state.currentStep : state.currentStep + 1,
+    currentStep,
     completed,
     errors,
+    indicators: indicatorReducer(state.indicators, action),
     board: newBoardState
   };
 };

@@ -22,11 +22,12 @@ export default {
       this.io.i2cWrite(address, this.REGISTER.MODE, 0x00);
 
       this.io.i2cRead(address, this.REGISTER.READ, READLENGTH, function(bytes) {
-        dataHandler({
+        const data = {
           x: int16(bytes[0], bytes[1]),
           y: int16(bytes[4], bytes[5]),
           z: int16(bytes[2], bytes[3])
-        })
+        };
+        dataHandler(data);
       });
     }
   }
