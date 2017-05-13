@@ -59,9 +59,11 @@ function updateGameState(newGameState) {
   gameState = newGameState;
   const {errors, indicators} = gameState;
 
+  /*
   if (errors) {
     errors.forEach(({location}) => board.indicateError(location));
   }
+  */
 
   if (indicators) {
     indicators.forEach(({location}) => board.indicateLocation(location))

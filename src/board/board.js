@@ -221,7 +221,7 @@ class Board {
                   //console.log('CALLBACK');
                   characterCallback(null, this.activeCharactersInLocation);
                 }, 100);
-              }, 50);
+              }, 100);
             }, 120);
           }, 100);
         });

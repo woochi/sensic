@@ -1,5 +1,6 @@
 import {Board, Magnetometer, Pin, Expander, Led} from 'johnny-five';
 import {int16} from 'johnny-five/lib/fn';
+import HMC5883L from './board/hmc5883l';
 
 class Multiplexer {
   constructor(options) {
@@ -60,33 +61,64 @@ board.on('ready', function() {
     io: this.io
   });
 
-  multiplexer.select(0);
+
+  //multiplexer.select(0);
 
   const magnetometer = new Magnetometer({
-    controller: 'HMC5883L'
+    controller: HMC5883L
   });
 
-  function logMagnetometer(data, a, b) {
-    console.log('MAGNETOMETER');
+  function logMagnetometer(heading) {
+    console.log('MAGNETOMETER', heading);
   }
 
   magnetometer.on('data', logMagnetometer);
 
-  setTimeout(() => {
-    multiplexer.select(7);
+  //setTimeout(() => {
+    multiplexer.select(2);
 
     const servo = new Expander({
       controller: 'PCA9685'
     });
     const servoBoard = new Board.Virtual(servo);
 
+    /*
+    const leds = [0, 1, 2, 3, 4].map(i => {
+      const offset = i * 3;
+      return new Led.RGB({
+        pins: {red: offset, green: offset + 1, blue: offset + 2},
+        board: servoBoard
+      });
+    });
+    */
+
+    const character = new Pin(10);
+
+    function loop() {
+      character.high();
+      setTimeout(() => {
+        character.low();
+        loop();
+      }, 500);
+    }
+
+    /*
+    leds.forEach(led => {
+      led.intensity(0.5);
+      led.color('#0000FF');
+      led.blink(1000);
+    });
+    */
+
+    /*
     var led = new Led.RGB({
       pins: {red: 0, green: 1, blue: 2},
       board: servoBoard
     });
     led.color('#00FF00');
     led.blink(1000);
-  }, 3000);
+    */
+  //}, 3000);
 
   /*
   const multiplexer = new Expander({
